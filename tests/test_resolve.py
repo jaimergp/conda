@@ -9,7 +9,7 @@ import pytest
 
 from conda.base.context import context, conda_tests_ctxt_mgmt_def_pol
 from conda.common.compat import iteritems, itervalues
-from conda.common.io import env_var
+from conda.common.io import env_var, env_vars
 from conda.exceptions import UnsatisfiableError
 from conda.gateways.disk.read import read_python_record
 from conda.models.channel import Channel
@@ -557,12 +557,32 @@ def test_unsat_channel_priority():
         assert "b -> c[version='>=2,<3']" in str(excinfo.value)
 
 
+def test_unsat_timeout_conflicts():
+    # conflict taken from test_unsat_shortest_chain_3
+    index = (
+        simple_rec(name='a', depends=['f', 'e']),
+        simple_rec(name='b', depends=['c']),
+        simple_rec(name='c', version='1.3.6',),
+        simple_rec(name='c', version='1.2.8',),
+        simple_rec(name='d', depends=['c >=0.8.0']),
+        simple_rec(name='e', depends=['c <1.3.0']),
+        simple_rec(name='f', depends=['d']),
+    )
+    r = Resolve(OrderedDict((prec, prec) for prec in index))
+
+    # timeout = 1ms
+    with env_vars({"CONDA_UNSATISFIABLE_HINTS_TIMEOUT_SECS": "0.001", "CONDA_CHANNEL_PRIORITY": "TRUE"},
+                  stack_callback=conda_tests_ctxt_mgmt_def_pol):
+        with pytest.raises(UnsatisfiableError) as exc_info:
+            r.install(['c=1.3.6', 'a', 'b'])
+        assert "conda config --set unsatisfiable_hints_timeout_secs" in str(exc_info.value)
+
+
 def test_nonexistent():
     assert not r.find_matches(MatchSpec('notarealpackage 2.0*'))
     assert raises(ResolvePackageNotFound, lambda: r.install(['notarealpackage 2.0*']))
     # This exact version of NumPy does not exist
     assert raises(ResolvePackageNotFound, lambda: r.install(['numpy 1.5']))
-
 
 def test_timestamps_and_deps():
     # If timestamp maximization is performed too early in the solve optimization,
