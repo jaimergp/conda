@@ -650,7 +650,7 @@ class UnsatisfiableError(CondaError):
         bad_deps = [chains[key] for key in sorted(iterkeys(chains))]
         return bad_deps
 
-    def __init__(self, bad_deps, chains=True, strict=False):
+    def __init__(self, bad_deps, chains=True, strict=False, timed_out=False):
         from .models.match_spec import MatchSpec
 
         messages = {'python': dals('''
@@ -688,12 +688,20 @@ Your installed version is: {ref}
 
         msg = ""
         if len(bad_deps) == 0:
-            msg += '''
+            if timed_out:
+                msg += '''
+Could not find conflicting dependencies in the allowed time. If you would
+like to know which packages conflict choose a larger timeout value.
+
+conda config --set unsatisfiable_hints_timeout_secs 3600
+                '''
+            else:
+                msg += '''
 Did not find conflicting dependencies. If you would like to know which
 packages conflict ensure that you have enabled unsatisfiable hints.
 
 conda config --set unsatisfiable_hints True
-            '''
+                '''
         else:
             for class_name, dep_class in bad_deps.items():
                 if dep_class:

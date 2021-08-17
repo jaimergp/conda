@@ -14,7 +14,7 @@ from ._vendor.tqdm import tqdm
 from .base.constants import ChannelPriority, MAX_CHANNEL_PRIORITY, SatSolverChoice
 from .base.context import context
 from .common.compat import iteritems, iterkeys, itervalues, odict, on_win, text_type
-from .common.io import time_recorder
+from .common.io import time_recorder, timeout
 from .common.logic import (Clauses, PycoSatSolver, PyCryptoSatSolver, PySatSolver, TRUE,
                            minimal_unsatisfiable_subset)
 from .common.toposort import toposort
@@ -342,14 +342,29 @@ class Resolve(object):
 
     def find_conflicts(self, specs, specs_to_add=None, history_specs=None):
         if context.unsatisfiable_hints:
+            timeout_secs = context.unsatisfiable_hints_timeout_secs
             if not context.json:
-                print("\nFound conflicts! Looking for incompatible packages.\n"
-                      "This can take several minutes.  Press CTRL-C to abort.")
-            bad_deps = self.build_conflict_map(specs, specs_to_add, history_specs)
+                print("\nFound conflicts! Looking for incompatible packages.")
+                print("This can take several minutes.")
+                if context.unsatisfiable_hints_timeout_secs > 0:
+                    print(f"Analysis will run for {timeout_secs:.1f} seconds maximum.")
+                print("Press CTRL-C to abort.")
+            # TODO: timeout not yet implemented on Windows
+            if timeout_secs > 0:
+                bad_deps = timeout(timeout_secs, self.build_conflict_map,
+                                   specs, specs_to_add, history_specs, default_return=None)
+            else:
+                bad_deps = self.build_conflict_map(specs, specs_to_add, history_specs)
         else:
             bad_deps = {}
+
+        if bad_deps is None:  # this means the function timed out
+            timed_out = True
+            bad_deps = {}
+        else:
+            timed_out = False
         strict_channel_priority = context.channel_priority == ChannelPriority.STRICT
-        raise UnsatisfiableError(bad_deps, strict=strict_channel_priority)
+        raise UnsatisfiableError(bad_deps, strict=strict_channel_priority, timed_out=timed_out)
 
     def breadth_first_search_for_dep_graph(self, root_spec, target_name, dep_graph, num_targets=1):
         """Return shorted path from root_spec to target_name"""
