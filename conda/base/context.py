@@ -322,6 +322,7 @@ class Context(Configuration):
 
     unsatisfiable_hints = ParameterLoader(PrimitiveParameter(True))
     unsatisfiable_hints_check_depth = ParameterLoader(PrimitiveParameter(2))
+    unsatisfiable_hints_timeout_secs = ParameterLoader(PrimitiveParameter(0, element_type=(int, float)))
 
     # conda_build
     bld_path = ParameterLoader(PrimitiveParameter(''))
@@ -930,7 +931,8 @@ class Context(Configuration):
                 'show_channel_urls',
                 'verbosity',
                 'unsatisfiable_hints',
-                'unsatisfiable_hints_check_depth'
+                'unsatisfiable_hints_check_depth',
+                'unsatisfiable_hints_timeout_secs',
             )),
             ('CLI-only', (
                 'deps_modifier',
@@ -1332,7 +1334,13 @@ class Context(Configuration):
                 fastest (but perhaps not the most complete). The higher this number, the
                 longer the generation of the unsat hint will take. Defaults to 3.
                 """),
-
+            'unsatisfiable_hints_timeout_secs': dals("""
+                If an environment cannot be solved, conda will try to detect the conflicts
+                behind the failure. This process can take a long time so, if needed, a timeout
+                (in seconds) can be set with this option. The default value is 0, which
+                means that no timeout will be applied and the conflict search will run
+                until it is finished.
+                """)
         })
 
 
