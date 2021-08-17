@@ -356,10 +356,11 @@ def timeout(timeout_secs, func, *args, **kwargs):
         from ..exceptions import TimeoutException
 
         def interrupt(signum, frame):
-            raise TimeoutException()
+            raise TimeoutException(f"Could not complete function {func} with args {args} "
+                                   f"and kwargs {kwargs} after {timeout_secs} seconds")
 
         signal.signal(signal.SIGALRM, interrupt)
-        signal.alarm(timeout_secs)
+        signal.setitimer(signal.ITIMER_REAL, timeout_secs)
 
         try:
             ret = func(*args, **kwargs)
