@@ -353,8 +353,7 @@ def timeout(timeout_secs, func, *args, **kwargs):
         except KeyboardInterrupt:  # pragma: no cover
             return default_return
     else:
-        class TimeoutException(Exception):
-            pass
+        from ..exceptions import TimeoutException
 
         def interrupt(signum, frame):
             raise TimeoutException()
