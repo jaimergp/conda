@@ -36,4 +36,3 @@ conda.tmp/
 *.iml
 *.ipr
 *.iws
-dev/docker.bashrc
