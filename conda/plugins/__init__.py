@@ -1,11 +1,12 @@
-# -*- coding: utf-8 -*-
 # Copyright (C) 2012 Anaconda, Inc
 # SPDX-License-Identifier: BSD-3-Clause
 from __future__ import annotations
-from typing import Callable, NamedTuple, Optional
-from collections.abc import Iterable
 
 import pluggy
+
+from typing import Callable, NamedTuple
+from collections.abc import Iterable
+
 
 _hookspec = pluggy.HookspecMarker("conda")
 register = pluggy.HookimplMarker("conda")
@@ -23,7 +24,7 @@ class CondaSubcommand(NamedTuple):
     summary: str
     action: Callable[
         [list[str]],  # arguments
-        Optional[int],  # return code
+        int | None,  # return code
     ]
 
 
@@ -46,7 +47,7 @@ class CondaSolver(NamedTuple):
     name: str
     backend: Callable[
         [list[str]],  # arguments
-        Optional[int],  # return code
+        int | None,  # return code
     ]
 
 
@@ -57,3 +58,4 @@ def conda_solvers() -> Iterable[CondaSolver]:
 
     :return: An iterable of solvers entries.
     """
+    ...

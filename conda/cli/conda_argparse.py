@@ -20,8 +20,8 @@ from textwrap import dedent
 import warnings
 
 from .. import __version__
-from ..auxlib.ish import dals
 from ..auxlib.compat import isiterable
+from ..auxlib.ish import dals
 from ..base import context
 from ..base.constants import COMPATIBLE_SHELLS, CONDA_HOMEPAGE_URL, DepsModifier, \
     UpdateModifier, SolverChoice
@@ -803,7 +803,7 @@ def configure_parser_init(sub_parsers):
         help=(
             "One or more shells to be initialized. If not given, the default value is 'bash' on "
             "unix and 'cmd.exe' & 'powershell' on Windows. Use the '--all' flag to initialize all "
-            f"shells. Available shells: {sorted(COMPATIBLE_SHELLS)}"
+            f"shells. Available shells: {sorted(COMPATIBLE_SHELLS)}."
         ),
         default=["cmd.exe", "powershell"] if on_win else ["bash"],
     )
