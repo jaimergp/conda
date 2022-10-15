@@ -32,6 +32,7 @@ from .constants import (
     DEFAULT_CHANNELS,
     DEFAULT_CHANNEL_ALIAS,
     DEFAULT_CUSTOM_CHANNELS,
+    DEFAULT_SOLVER,
     DepsModifier,
     ERROR_UPLOAD_URL,
     KNOWN_SUBDIRS,
@@ -41,7 +42,6 @@ from .constants import (
     SEARCH_PATH,
     SafetyChecks,
     SatSolverChoice,
-    SolverChoice,
     UpdateModifier,
     CONDA_LOGS_DIR,
     PREFIX_NAME_DISALLOWED_CHARS,
@@ -62,9 +62,6 @@ from ..common.url import has_scheme, path_to_url, split_scheme_auth_token
 from ..common.decorators import env_override
 
 from .. import CONDA_SOURCE_ROOT
-
-from .. import plugins
-from ..plugins import solvers
 
 try:
     os.getcwd()
@@ -153,15 +150,6 @@ def ssl_verify_validation(value):
                     "certificate bundle file, or a path to a directory containing "
                     "certificates of trusted CAs." % value)
     return True
-
-
-@functools.lru_cache(maxsize=None)  # FUTURE: Python 3.9+, replace w/ functools.cache
-def get_plugin_manager():
-    pm = pluggy.PluginManager('conda')
-    pm.register(solvers)
-    pm.add_hookspecs(plugins)
-    pm.load_setuptools_entrypoints('conda')
-    return pm
 
 
 class Context(Configuration):
@@ -353,7 +341,7 @@ class Context(Configuration):
     sat_solver = ParameterLoader(PrimitiveParameter(SatSolverChoice.PYCOSAT))
     solver_ignore_timestamps = ParameterLoader(PrimitiveParameter(False))
     solver = ParameterLoader(
-        PrimitiveParameter(solvers.DEFAULT_SOLVER, element_type=SolverChoice),
+        PrimitiveParameter(DEFAULT_SOLVER),
         aliases=("experimental_solver",),
     )
 
@@ -414,14 +402,6 @@ class Context(Configuration):
                                                                              argparse_args)
 
         super().__init__(search_path=search_path, app_name=APP_NAME, argparse_args=argparse_args)
-
-        # Add plugin support
-        self._plugin_manager = get_plugin_manager()
-
-    @property
-    @functools.lru_cache(maxsize=None)  # FUTURE: Python 3.9+, replace w/ functools.cache
-    def plugin_manager(self):
-        return self._plugin_manager
 
     def post_build_validation(self):
         errors = []
@@ -857,17 +837,17 @@ class Context(Configuration):
         builder.append("%s/%s" % self.os_distribution_name_version)
         if self.libc_family_version[0]:
             builder.append("%s/%s" % self.libc_family_version)
-        if self.solver.value != "classic":
+        if self.solver != "classic":
             from ..core.solve import _get_solver_class
 
-            user_agent_str = "solver/%s" % self.solver.value
+            user_agent_str = "solver/%s" % self.solver
             try:
                 # Solver.user_agent has to be a static or class method
                 user_agent_str += f" {_get_solver_class().user_agent()}"
             except Exception as exc:
                 log.debug(
                     "User agent could not be fetched from solver class '%s'.",
-                    self.solver.value,
+                    self.solver,
                     exc_info=exc
                 )
             builder.append(user_agent_str)

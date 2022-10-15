@@ -3,25 +3,21 @@
 # SPDX-License-Identifier: BSD-3-Clause
 from functools import lru_cache
 
-from .. import plugins
+from . import register, specs
 from ..auxlib.ish import dals
+from ..base.constants import CLASSIC_SOLVER
 from ..common.io import dashlist
-from ..base.context import context
 from ..exceptions import PluginError
 
 
-#: The name of the default solver, currently "classic"
-DEFAULT_SOLVER = CLASSIC_SOLVER = "classic"
-
-
-@plugins.register
+@register
 def conda_solvers():
     """
     The classic solver as shipped by default in conda.
     """
     from ..core.solve import Solver
 
-    yield plugins.CondaSolver(
+    yield specs.CondaSolver(
         name=CLASSIC_SOLVER,
         backend=Solver,
     )
@@ -29,10 +25,10 @@ def conda_solvers():
 
 # FUTURE: Python 3.8+, replace with functools.cached_property
 @lru_cache(maxsize=None)
-def get_available_solvers():
+def get_available_solvers(pm):
     """
+    Given the provided plugin manager, return all registered solvers.
     """
-    pm = context.get_plugin_manager()
     solvers = sorted(
         (
             solver
@@ -42,7 +38,7 @@ def get_available_solvers():
         key=lambda solver: solver.name,
     )
     # Check for conflicts
-    seen = {}
+    seen = set()
     conflicts = [
         solver
         for solver in solvers

@@ -22,12 +22,12 @@ import warnings
 from .. import __version__
 from ..auxlib.compat import isiterable
 from ..auxlib.ish import dals
-from ..base import context
 from ..base.constants import COMPATIBLE_SHELLS, CONDA_HOMEPAGE_URL, DepsModifier, \
-    UpdateModifier, SolverChoice
+    UpdateModifier
 from ..common.constants import NULL
 from ..common.io import dashlist
 from ..exceptions import PluginError
+from ..plugins.manager import get_plugin_manager
 
 log = getLogger(__name__)
 
@@ -120,7 +120,7 @@ class ArgumentParser(ArgumentParserBase):
         if self.description:
             self.description += "\n\nOptions:\n"
 
-        pm = context.get_plugin_manager()
+        pm = get_plugin_manager()
         self._subcommands = sorted(
             (
                 subcommand
@@ -1858,11 +1858,14 @@ def add_parser_solver(p):
 
     TODO: This will be replaced by a proper plugin mechanism in the future.
     """
+    from conda.plugins import manager, solvers
+    pm = manager.get_plugin_manager()
+    solver_choices = [solver.name for solver in solvers.get_available_solvers(pm)]
     group = p.add_mutually_exclusive_group()
     group.add_argument(
         "--solver",
         dest="solver",
-        choices=[v.value for v in SolverChoice],
+        choices=solver_choices,
         help="Choose which solver backend to use.",
         default=NULL,
     )
@@ -1870,7 +1873,7 @@ def add_parser_solver(p):
         "--experimental-solver",
         action=PendingDeprecationAction,
         dest="solver",
-        choices=[v.value for v in SolverChoice],
+        choices=solver_choices,
         help="DEPRECATED. Please use '--solver' instead.",
         default=NULL,
     )
