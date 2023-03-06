@@ -61,7 +61,8 @@ class CondaPluginManager(pluggy.PluginManager):
             return super().load_setuptools_entrypoints(*args, **kwargs)
         except Exception as err:
             raise PluginError(
-                f"Error while loading conda plugins from entrypoints: {err}"
+                f"Error while loading conda plugins from entrypoints with "
+                f"args={args}, kwargs={kwargs}. {type(err).__name__}: {err}"
             )
 
     def get_hook_results(self, name: str) -> list:
