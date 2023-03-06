@@ -8,7 +8,7 @@ import os
 from os.path import dirname, isdir, join
 from pathlib import Path
 from re import escape
-from subprocess import CalledProcessError, check_output
+from subprocess import CalledProcessError, check_output, run as run_subprocess
 import platform
 import sys
 from tempfile import gettempdir
@@ -2829,7 +2829,12 @@ def _run_command(*lines):
         join = "\n".join
         source = f". {Path(context.root_prefix, 'etc', 'profile.d', 'conda.sh')}"
     script = join((source, *lines))
-    output = check_output(script, shell=True).decode().splitlines()
+    process = run_subprocess(script, shell=True, capture_output=True, text=True)
+    if process.returncode:
+        print(process.stdout)
+        print(process.stderr, file=sys.stderr)
+        process.check_returncode()  # will raise
+    output = process.stdout.strip().splitlines()
     return [Path(path) for path in filter(None, output)]
 
 
