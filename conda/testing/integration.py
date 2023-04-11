@@ -142,12 +142,13 @@ def _get_temp_prefix(name=None, use_restricted_unicode=False):
             "           this will be slow and unlike the majority of end-user installs.\n"
             "           Please pass `--basetemp=<somewhere-else>` instead.".format(
                 tmpdir, sys.prefix
-            )
+            ),
+            file=sys.stderr,
         )
     try:
         rm_rf(dst)
     except Exception as e:
-        print(e)
+        print(e, file=sys.stderr)
         pass
 
     return prefix
