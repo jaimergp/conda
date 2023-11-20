@@ -208,12 +208,21 @@ def verify(_):
 def display_actions(
     actions, index, show_channel_urls=None, specs_to_remove=(), specs_to_add=()
 ):
-    if "FETCH" in actions:
-        actions["FETCH"] = [index[d] for d in actions["FETCH"]]
-    if "LINK" in actions:
-        actions["LINK"] = [index[d] for d in actions["LINK"]]
-    if "UNLINK" in actions:
-        actions["UNLINK"] = [index[d] for d in actions["UNLINK"]]
+    exceptions = []
+    for action in "FETCH", "LINK", "UNLINK":
+        records = []
+        for dist in actions.get(action, ()):
+            try:
+                records.append(index[dist])
+            except KeyError as exc:
+                exceptions.append(exc)
+                print("Missing record in index:", exc, "- found these name matches:")
+                for index_record in index:
+                    if index_record.name == dist.name:
+                        print(" -", index_record)
+        actions[action] = records
+    if exceptions:
+        raise CondaError("Missing index records") from exceptions[0]
     index = {prec: prec for prec in index.values()}
     return _display_actions(
         actions, index, show_channel_urls, specs_to_remove, specs_to_add
