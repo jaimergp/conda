@@ -45,3 +45,6 @@ rever/
 
 # setuptools-scm
 conda/_version.py
+
+# conda project-based workflow
+.conda/
