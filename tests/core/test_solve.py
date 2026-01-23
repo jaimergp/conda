@@ -934,8 +934,8 @@ def test_force_remove_1(tmpdir, request):
             )
         )
         if context.solver == "rattler":
-            # rattler puts numpy last; without python in the mix, its position
-            # is not topologically relevant
+            # rattler puts numpy last; but without python in the mix, its position
+            # is not topologically relevant, so it's ok
             assert sorted(convert_to_dist_str(final_state_2)) == sorted(order)
         else:
             assert convert_to_dist_str(final_state_2) == order
@@ -2596,7 +2596,7 @@ def test_pinned_1(tmpdir, monkeypatch: MonkeyPatch):
 
     # now update without pinning
     if context.solver in ("libmamba", "rattler"):
-        # LIBMAMBA ADJUSTMENT:
+        # LIBMAMBA/RATTLER ADJUSTMENT:
         # libmamba and rattler decide to stay in python=2.6 unless explicit
         specs_to_add = (MatchSpec("python=3"),)
     else:
