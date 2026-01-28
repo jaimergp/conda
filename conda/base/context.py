@@ -122,6 +122,8 @@ non_x86_machines = {
     "ppc64le",
     "riscv64",
     "s390x",
+    "wasm32",
+    "z"
 }
 _arch_names = {
     32: "x86",

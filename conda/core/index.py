@@ -636,8 +636,6 @@ def get_archspec_name() -> str | None:
     # This has to reverse what Context.subdir is doing
     if target_arch in non_x86_machines:
         machine = target_arch
-    elif target_arch == "zos":
-        return None
     elif target_arch.isdigit():
         machine = _arch_names[int(target_arch)]
     else:
