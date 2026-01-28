@@ -639,7 +639,7 @@ def get_archspec_name() -> str | None:
     elif target_arch.isdigit():
         machine = _arch_names[int(target_arch)]
     else:
-        return None
+        return "0"
 
     native_subdir = context._native_subdir()
 
