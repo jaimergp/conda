@@ -123,12 +123,17 @@ non_x86_machines = {
     "riscv64",
     "s390x",
     "wasm32",
-    "z"
+    "z",
 }
-_arch_names = {
-    32: "x86",
-    64: "x86_64",
+subdir_arch_to_archspec_name = {
+    "32": "x86",
+    "64": "x86_64",
+    "arm64": "aarch64",
 }
+"""
+These subdir components are not valid archspec identifiers;
+map them to the right counterpart.
+"""
 
 user_rc_path: PathType = abspath(expanduser(f"~/{DEFAULT_CONDARC_FILENAME}"))
 sys_rc_path: PathType = join(sys.prefix, DEFAULT_CONDARC_FILENAME)
@@ -679,7 +684,7 @@ class Context(Configuration):
         if m in non_x86_machines:
             return m
         else:
-            return _arch_names[self.bits]
+            return subdir_arch_to_archspec_name[str(self.bits)]
 
     @property
     def platform(self) -> str:

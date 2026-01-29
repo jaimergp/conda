@@ -630,16 +630,14 @@ def get_archspec_name() -> str | None:
 
     :return: The architecture name if available, otherwise None.
     """
-    from ..base.context import _arch_names, non_x86_machines
+    from ..base.context import subdir_arch_to_archspec_name
 
-    target_plat, target_arch = context.subdir.split("-")
+    _, target_arch = context.subdir.split("-")
     # This has to reverse what Context.subdir is doing
-    if target_arch in non_x86_machines:
-        machine = target_arch
-    elif target_arch.isdigit():
-        machine = _arch_names[int(target_arch)]
+    if target_arch in subdir_arch_to_archspec_name:
+        machine = subdir_arch_to_archspec_name[target_arch]
     else:
-        return "0"
+        machine = target_arch
 
     native_subdir = context._native_subdir()
 
