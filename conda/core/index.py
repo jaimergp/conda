@@ -634,8 +634,8 @@ def get_archspec_name() -> str | None:
 
     _, target_arch = context.subdir.split("-")
     # This has to reverse what Context.subdir is doing
-    if target_arch in subdir_arch_to_archspec_name:
-        machine = subdir_arch_to_archspec_name[target_arch]
+    if machine := subdir_arch_to_archspec_name.get(target_arch):
+        pass  # already assigned :)
     else:
         machine = target_arch
 
