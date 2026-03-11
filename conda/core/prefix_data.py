@@ -19,7 +19,6 @@ from frozendict import frozendict
 
 from ..base.constants import (
     CONDA_ENV_VARS_UNSET_VAR,
-    CONDA_PACKAGE_EXTENSIONS,
     PREFIX_CREATION_TIMESTAMP_FILE,
     PREFIX_FROZEN_FILE,
     PREFIX_MAGIC_FILE,
@@ -34,7 +33,7 @@ from ..base.context import context, locate_prefix_by_name
 from ..common.compat import on_mac, on_win
 from ..common.constants import NULL
 from ..common.io import time_recorder
-from ..common.path import expand, paths_equal
+from ..common.path import expand, paths_equal, strip_pkg_extension
 from ..common.serialize import json
 from ..common.url import mask_anaconda_token
 from ..common.url import remove_auth as url_remove_auth
@@ -226,7 +225,7 @@ class PrefixData(metaclass=PrefixDataType):
 
     def is_environment(self) -> bool:
         """
-        Check whether the PrefixData path is a valida conda environment.
+        Check whether the PrefixData path is a valid conda environment.
 
         This is assessed by checking if `conda-meta/history` marker file exists.
         """
@@ -427,6 +426,38 @@ class PrefixData(metaclass=PrefixDataType):
         else:
             return datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
 
+    def size(self) -> int:
+        """
+        Compute the total size of a conda environment prefix.
+
+        This aggregates the installed size of all packages in the environment,
+        plus the size of non-manifest files under conda-meta (history, markers,
+        etc.)
+
+        :returns: Total size in bytes.
+        """
+        total_size = 0
+
+        # 1. sum up the installed size of each package
+        for record in self.iter_records():
+            total_size += record.package_size(self.prefix_path)
+
+        # 2. add up the size of non-manifest files under conda-meta
+        conda_meta_dir = self.prefix_path / "conda-meta"
+        if self.exists():
+            try:
+                for meta_file in conda_meta_dir.iterdir():
+                    if meta_file.suffix == ".json":
+                        continue
+                    try:
+                        total_size += meta_file.stat().st_size
+                    except OSError:
+                        pass
+            except OSError:
+                pass
+
+        return total_size
+
     # endregion
     # region Records
 
@@ -436,9 +467,9 @@ class PrefixData(metaclass=PrefixDataType):
         _conda_meta_dir = self.prefix_path / "conda-meta"
         if lexists(_conda_meta_dir):
             conda_meta_json_paths = (
-                p
-                for p in (entry.path for entry in os.scandir(_conda_meta_dir))
-                if p[-5:] == ".json"
+                entry.path
+                for entry in os.scandir(_conda_meta_dir)
+                if entry.name.endswith(".json") and not entry.name.startswith("._")
             )
             for meta_file in conda_meta_json_paths:
                 self._load_single_record(meta_file)
@@ -457,17 +488,15 @@ class PrefixData(metaclass=PrefixDataType):
 
     def _get_json_fn(self, prefix_record: PrefixRecord) -> str:
         fn = prefix_record.fn
-        known_ext = False
-        # .dist-info is for things installed by pip
-        for ext in CONDA_PACKAGE_EXTENSIONS + (".dist-info",):
-            if fn.endswith(ext):
-                fn = fn[: -len(ext)]
-                known_ext = True
-        if not known_ext:
+        # Check package extensions (dynamic) or .dist-info (pip-installed)
+        stripped, ext = strip_pkg_extension(fn)
+        if not ext and fn.endswith(".dist-info"):
+            stripped = fn[: -len(".dist-info")]
+        elif not ext:
             raise ValueError(
                 f"Attempted to make prefix record for unknown package type: {fn}"
             )
-        return fn + ".json"
+        return stripped + ".json"
 
     def insert(self, prefix_record: PrefixRecord, remove_auth: bool = True) -> None:
         if prefix_record.name in self._prefix_records:
@@ -770,7 +799,8 @@ def get_conda_anchor_files_and_records(
         r"^{}/[^/]+(?:{})$".format(
             re.escape(site_packages_short_path),
             r"|".join(re.escape(fn) for fn in anchor_file_endings),
-        )
+        ),
+        flags=re.IGNORECASE if on_win else 0,
     ).match
 
     # We could fix this earlier in the PrefixRecord instantiation, but then
@@ -787,7 +817,7 @@ def get_conda_anchor_files_and_records(
             if matcher(fpath):
                 anchor_paths.append(fpath)
         if len(anchor_paths) > 1:
-            anchor_path = sorted(anchor_paths, key=len)[0]
+            anchor_path = max(anchor_paths, key=len)
             log.info(
                 "Package %s has multiple python anchor files.\n  Using %s",
                 prefix_record.record_id(),

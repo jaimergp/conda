@@ -18,6 +18,7 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Programming Language :: Python :: Implementation :: CPython",
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
@@ -30,7 +31,6 @@ dependencies = [
   "conda-package-handling >=2.2.0",
   "distro >=1.5.0",
   "frozendict >=2.4.2",
-  "jsonpatch >=1.32",
   "menuinst >=2",
   "packaging >=23.0",
   "platformdirs >=3.10.0",

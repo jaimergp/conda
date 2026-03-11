@@ -41,6 +41,7 @@ from ..common.configuration import (
     PrimitiveParameter,
     SequenceParameter,
     ValidationError,
+    YamlRawParameter,
 )
 from ..common.constants import TRACE
 from ..common.iterators import groupby_to_dict, unique
@@ -672,7 +673,7 @@ class Context(Configuration):
 
     @property
     def arch_name(self) -> str:
-        m = platform.machine()
+        m = platform.machine().lower()
         if m in non_x86_machines:
             return m
         else:
@@ -727,7 +728,7 @@ class Context(Configuration):
 
     @cache
     def _native_subdir(self) -> str:
-        m = platform.machine()
+        m = platform.machine().lower()
         if m in non_x86_machines:
             return f"{self.platform}-{m}"
         elif self.platform == "zos":
@@ -1235,10 +1236,13 @@ class Context(Configuration):
     def create_default_packages(self) -> tuple[str, ...]:
         """Returns a list of `create_default_packages`, removing any explicit packages."""
         from ..common.io import dashlist
-        from ..common.path import is_package_file
 
         grouped_packages = groupby_to_dict(
-            lambda x: "explicit" if is_package_file(x) else "spec",
+            lambda x: (
+                "explicit"
+                if context.plugin_manager.has_package_extension(x)
+                else "spec"
+            ),
             sequence=self._create_default_packages,
         )
 
@@ -2064,6 +2068,7 @@ def reset_context(
 
     PluginConfig.remove_all_plugin_settings()
 
+    YamlRawParameter.cache_clear()
     context.__init__(search_path, argparse_args)
     context.__dict__.pop("_Context__conda_build", None)
     from ..models.channel import Channel
@@ -2221,8 +2226,8 @@ def env_name(prefix: PathType) -> PathType | str | None:
 
 
 def locate_prefix_by_name(name: str, envs_dirs: PathsType | None = None) -> PathType:
-    """Find the location of a prefix given a conda env name.  If the location does not exist, an
-    error is raised.
+    """Find the location of a prefix given a conda env name. If the location does not exist, an
+    error is raised. If the prefix is the base or root env, the root prefix is returned.
     """
     if not name:
         raise ValueError("'name' cannot be empty.")

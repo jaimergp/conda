@@ -44,6 +44,11 @@ if TYPE_CHECKING:
         dict[str, PrefixRecord],
     ]
 
+    PackageExtract: TypeAlias = Callable[
+        [PathType, PathType],  # (source_path, destination_directory)
+        None,
+    ]
+
     SinglePlatformEnvironmentExport = Callable[[Environment], str]
     MultiPlatformEnvironmentExport = Callable[[Iterable[Environment]], str]
 
@@ -598,11 +603,26 @@ class CondaEnvironmentSpecifier(CondaPlugin):
     :meth:`~conda.plugins.hookspec.CondaSpecs.conda_environment_specifiers`.
 
     :param name: name of the spec (e.g., ``environment_yaml``)
+    :param aliases: user-friendly format aliases (e.g., ("yaml",)). Defaults to an empty list.
     :param environment_spec: EnvironmentSpecBase subclass handler
+    :param default_filenames: default filename patterns this specifier handles (e.g., ("environment.yml", "*.conda-lock.yml"))
     """
 
     name: str
     environment_spec: type[EnvironmentSpecBase]
+    default_filenames: tuple[str, ...] = field(default_factory=tuple)
+    aliases: tuple[str, ...] = field(default_factory=tuple)
+
+    def __post_init__(self):
+        super().__post_init__()  # Handle name normalization
+        # Normalize aliases using same pattern as name normalization
+        try:
+            self.aliases = tuple(
+                dict.fromkeys(alias.lower().strip() for alias in self.aliases)
+            )
+        except AttributeError:
+            # AttributeError: alias is not a string
+            raise PluginError(f"Invalid plugin aliases for {self!r}")
 
 
 @dataclass
@@ -639,3 +659,28 @@ class CondaEnvironmentExporter(CondaPlugin):
             raise PluginError(
                 f"Exactly one of export or multiplatform_export must be set for {self!r}"
             )
+
+
+@dataclass
+class CondaPackageExtractor(CondaPlugin):
+    """
+    Return type to use when defining a conda package extractor plugin hook.
+
+    Package extractors handle the extraction of different package archive formats.
+    Each extractor specifies which file extensions it supports and provides an
+    extraction function to unpack the archive.
+
+    For details on how this is used, see
+    :meth:`~conda.plugins.hookspec.CondaSpecs.conda_package_extractors`.
+
+    :param name: Extractor name (e.g., ``conda-package``, ``wheel-package``).
+    :param extensions: List of file extensions this extractor handles
+                       (e.g., ``[".conda", ".tar.bz2"]`` or ``[".whl"]``).
+    :param extract: Callable that extracts the package archive. Takes the source
+                    archive path and the destination directory where the package
+                    contents should be extracted.
+    """
+
+    name: str
+    extensions: list[str]
+    extract: PackageExtract

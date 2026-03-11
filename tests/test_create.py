@@ -24,6 +24,7 @@ import pytest
 from conda import CondaError, CondaExitZero, CondaMultiError
 from conda.auxlib.ish import dals
 from conda.base.constants import (
+    PACKAGE_CACHE_MAGIC_FILE,
     PREFIX_MAGIC_FILE,
     PREFIX_PINNED_FILE,
     ChannelPriority,
@@ -65,10 +66,7 @@ from conda.exceptions import (
 )
 from conda.gateways.disk.create import compile_multiple_pyc
 from conda.gateways.disk.permissions import make_read_only
-from conda.gateways.subprocess import (
-    Response,
-    subprocess_call_with_clean_env,
-)
+from conda.gateways.subprocess import Response
 from conda.models.channel import Channel
 from conda.models.match_spec import MatchSpec
 from conda.models.version import VersionOrder
@@ -88,7 +86,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from typing import Literal
 
-    from pytest import CaptureFixture, FixtureRequest, MonkeyPatch
+    from pytest import FixtureRequest, MonkeyPatch
     from pytest_mock import MockerFixture
 
     from conda.testing.fixtures import (
@@ -1055,7 +1053,6 @@ def test_update_with_pinned_packages(
 
         conda_cli("update", f"--prefix={prefix}", "dependency", "--yes")
 
-        PrefixData._cache_.clear()
         assert not package_is_installed(prefix, "dependent=1.0")
         assert not package_is_installed(prefix, "dependency=1.0")
         assert package_is_installed(prefix, "dependent=2.0")
@@ -1417,7 +1414,6 @@ def test_update_all_updates_pip_pkg(
         assert err == 0, f"pip install failed: {stderr}"
 
         # ensure installed version of itsdangerous is from PyPI
-        PrefixData._cache_.clear()
         assert (prec := package_is_installed(prefix, "itsdangerous"))
         assert prec.dist_fields_dump() == {
             "base_url": "https://conda.anaconda.org/pypi",
@@ -2490,95 +2486,6 @@ def test_create_env_different_platform(
         )
 
 
-def test_conda_downgrade(
-    monkeypatch: MonkeyPatch, tmp_env: TmpEnvFixture, conda_cli: CondaCLIFixture
-):
-    # Create an environment with the current conda under test, but include an earlier
-    # version of conda and other packages in that environment.
-    # Make sure we can flip back and forth.
-
-    monkeypatch.setenv("CONDA_AUTO_UPDATE_CONDA", "false")
-    monkeypatch.setenv("CONDA_ALLOW_CONDA_DOWNGRADES", "true")
-    monkeypatch.setenv("CONDA_DLL_SEARCH_MODIFICATION_ENABLE", "1")
-
-    # elevate verbosity so we can inspect subprocess' stdout/stderr
-    monkeypatch.setenv("CONDA_VERBOSE", "2")
-
-    # for py-rattler
-    monkeypatch.setenv("CONDA_CHANNELS", "conda-forge")
-
-    # with tmp_env("python=3.11", "conda") as prefix:  # rev 0
-    # TMP: Ask for py-rattler
-    with tmp_env(
-        "python=3.11",
-        "pip",
-        "conda",
-        "py-rattler>=0.17.0",
-        "git",
-    ) as prefix:  # rev 0
-        python_exe = str(prefix / PYTHON_BINARY)
-        # TMP: Install conda-rattler-solver in target env too
-        subprocess_call_with_clean_env(
-            [
-                python_exe,
-                "-m",
-                "pip",
-                "install",
-                "git+https://github.com/conda-incubator/conda-rattler-solver.git#egg=conda-rattler-solver",
-                "--no-deps",
-            ]
-        )
-        conda_exe = str(prefix / BIN_DIRECTORY / ("conda.exe" if on_win else "conda"))
-        assert (py_prec := package_is_installed(prefix, "python"))
-        assert (conda_prec := package_is_installed(prefix, "conda"))
-
-        # runs our current version of conda to install into the foreign env
-        conda_cli("install", f"--prefix={prefix}", "filelock", "--yes")  # rev 1
-        assert package_is_installed(prefix, "filelock")
-
-        # runs the conda in the env to install something new into the env
-        PrefixData._cache_.clear()
-        subprocess_call_with_clean_env(
-            [conda_exe, "install", f"--prefix={prefix}", "itsdangerous", "--yes"],
-            path=prefix,
-        )  # rev 2
-        assert package_is_installed(prefix, "itsdangerous")
-
-        # downgrade the version of conda in the env (using our current outer conda version)
-        PrefixData._cache_.clear()
-        conda_cli(
-            "install",
-            f"--prefix={prefix}",
-            f"conda<{conda_prec.version}",
-            "--yes",
-        )  # rev 3
-        assert package_is_installed(prefix, f"conda<{conda_prec.version}")
-
-        # undo the conda downgrade in the env (using our current outer conda version)
-        conda_cli("install", f"--prefix={prefix}", "--rev=2", "--yes")
-        assert package_is_installed(prefix, f"python={py_prec.version}")
-        assert package_is_installed(prefix, f"conda={conda_prec.version}")
-        assert package_is_installed(prefix, "filelock")
-        assert package_is_installed(prefix, "itsdangerous")
-
-        # use the conda in the env to revert to a previous state
-        PrefixData._cache_.clear()
-        subprocess_call_with_clean_env(
-            [conda_exe, "install", f"--prefix={prefix}", "--rev=1", "--yes"],
-            path=prefix,
-        )
-        assert package_is_installed(prefix, f"python={py_prec.version}")
-        assert package_is_installed(prefix, f"conda={conda_prec.version}")
-        assert package_is_installed(prefix, "filelock")
-        assert not package_is_installed(prefix, "itsdangerous")
-
-        result = subprocess_call_with_clean_env(
-            [conda_exe, "info", "--json"],
-            path=prefix,
-        )
-        assert json.loads(result.stdout)["conda_version"] == conda_prec.version
-
-
 @pytest.mark.skipif(
     on_win or platform.machine() in ("arm64", "aarch64"),
     reason="openssl only has a postlink script on unix / package missing for osx-arm64",
@@ -2761,19 +2668,59 @@ def test_repodata_v2_base_url(
 
 
 def test_create_dry_run_without_prefix(
-    conda_cli: CondaCLIFixture, capsys: CaptureFixture
+    conda_cli: CondaCLIFixture,
+    test_recipes_channel: Path,  # mock channel
 ):
-    with pytest.raises(DryRunExit):
-        conda_cli("create", "--dry-run", "--json", "ca-certificates")
-    out, _ = capsys.readouterr()
+    out, _, _ = conda_cli(
+        "create",
+        "--dry-run",
+        "--json",
+        "small-executable",
+        raises=DryRunExit,
+    )
     data = json.loads(out)
     assert any(
-        pkg for pkg in data["actions"]["LINK"] if pkg["name"] == "ca-certificates"
+        pkg for pkg in data["actions"]["LINK"] if pkg["name"] == "small-executable"
     )
 
 
-def test_create_without_prefix_raises_argument_error(conda_cli: CondaCLIFixture):
-    conda_cli("create", "--json", "ca-certificates", raises=ArgumentError)
+def test_create_download_only_without_prefix(
+    conda_cli: CondaCLIFixture,
+    test_recipes_channel: Path,  # mock channel
+    tmp_pkgs_dir: Path,  # mock package cache so it will be empty
+):
+    # empty cache, only has package cache magic file
+    assert tmp_pkgs_dir.exists()
+    assert set(tmp_pkgs_dir.iterdir()) == {tmp_pkgs_dir / PACKAGE_CACHE_MAGIC_FILE}
+
+    # download package to pkgs dir
+    _, _, _ = conda_cli(
+        "create",
+        "--download-only",
+        "--yes",
+        "small-executable",
+        raises=CondaExitZero,
+    )
+
+    # check that package was downloaded/extracted
+    assert tmp_pkgs_dir.exists()
+    assert set(tmp_pkgs_dir.iterdir()) == {
+        tmp_pkgs_dir / "cache",
+        tmp_pkgs_dir / "small-executable-1.0.0-0",
+        tmp_pkgs_dir / "small-executable-1.0.0-0.conda",
+        tmp_pkgs_dir / PACKAGE_CACHE_MAGIC_FILE,
+    }
+
+
+def test_create_without_prefix_raises_argument_error(
+    conda_cli: CondaCLIFixture,
+    test_recipes_channel: Path,  # mock channel
+):
+    with pytest.raises(
+        ArgumentError,
+        match="one of the arguments -n/--name -p/--prefix is required",
+    ):
+        conda_cli("create", "small-executable")
 
 
 def test_create_with_clone_and_packages_raises_argument_error(
