@@ -2,7 +2,8 @@ archspec >=0.2.3
 boltons >=23.0.0
 charset-normalizer
 conda-content-trust >=0.2.0  # for signature verification
-conda-forge::conda-rattler-solver
+# conda-forge::conda-rattler-solver
+conda-forge::py-rattler >=0.23,<0.24
 conda-libmamba-solver >=25.4.0
 conda-package-handling >=2.2.0
 distro >=1.5.0
